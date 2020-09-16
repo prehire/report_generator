@@ -2,6 +2,7 @@
 import csv
 import psycopg2
 from datetime import datetime
+from configparser import ConfigParser
 
 CANDIDACY_FIELDS = [
     "e_candidacies.id",
@@ -48,10 +49,16 @@ CANDIDACY_FIELDS = [
 
 class JobCandidates:
     def __init__(self):
-        pass
+        config = ConfigParser()
+        config.read('./config.ini')
+        self.DBNAME = config["DATABASE"]["DBNAME"]
+        self.USER = config["DATABASE"]["USER"]
+        self.PASSWORD = config["DATABASE"]["PASSWORD"]
+        self.HOST = config["DATABASE"]["HOST"]
+        self.PORT = config["DATABASE"]["PORT"]
 
     def connect_psql(self, sql):
-        conn = psycopg2.connect(database="postgres", user="lss", password="123456", host="localhost", port="5433")
+        conn = psycopg2.connect(database=self.DBNAME, user=self.USER, password=self.PASSWORD, host=self.HOST, port=self.PORT)
         # print("Opened database successfully")
 
         cur = conn.cursor()
@@ -69,7 +76,7 @@ class JobCandidates:
 
     def get_candidacies(self, job_ids):
 
-        conn = psycopg2.connect(database="postgres", user="lss", password="123456", host="localhost", port="5433")
+        conn = psycopg2.connect(database=self.DBNAME, user=self.USER, password=self.PASSWORD, host=self.HOST, port=self.PORT)
 
         query = """
             select
@@ -91,7 +98,7 @@ class JobCandidates:
                     INNER JOIN e_users ON e_candidacies.user_id=e_users.id 
                     INNER JOIN e_pipeline_stages 
                     ON e_pipeline_stages.job_id=e_candidacies.job_id AND e_candidacies.pipeline_stage_id=e_pipeline_stages.id
-                    WHERE e_candidacies.job_id IN {} ORDER BY e_candidacies.created_at desc limit 4000;
+                    WHERE e_candidacies.job_id IN {} ORDER BY e_candidacies.created_at;
                 """.format(
             select_list, job_ids
         )
@@ -116,10 +123,10 @@ class JobCandidates:
         organizations = self.connect_psql(select_organization_sql)
         print("organizations: ", organizations)
 
-        org_id = organizations[0][0]
+        org_id = organizations[0][0] if len(organizations) > 0 else "NULL"
         print("org_id: ", org_id)
 
-        select_custom_field_sql = f"SELECT DISTINCT * FROM custom_fields WHERE organization_id={org_id};"
+        select_custom_field_sql = f"SELECT DISTINCT * FROM e_custom_fields WHERE organization_id={org_id};"
         custom_fields = self.connect_psql(select_custom_field_sql)
         print("custom_fields length: ", len(custom_fields))
 
@@ -142,35 +149,44 @@ class JobCandidates:
             assessment_ids_set.add(value[0])
         assessment_ids = tuple(assessment_ids_set)
 
-        select_assessments_sql = f"SELECT DISTINCT * from e_assessments WHERE id IN {assessment_ids};"
-        assessments = self.connect_psql(select_assessments_sql)
+        if len(assessment_ids) > 0:
+            select_assessments_sql = f"SELECT DISTINCT * from e_assessments WHERE id IN {assessment_ids};"
+            assessments = self.connect_psql(select_assessments_sql)
+        else:
+            assessments = [()]
         print("assessments length: ", len(assessments))
 
         candidacies = self.get_candidacies(job_ids)
         print("candidacies length: ", len(candidacies))
 
         candidate_ids_set = set()
-        for value in candidacies:
-            # fields: ['id', 'user_id', 'job_id', 'pipeline_stage_id', 'added_to_stage_at', 'score', 'possible_score', 'weighted_percentage_score', 'archive_reason', 'parent_candidacy_id', 'status', 'progress', 'failed', 'withdraw_reason', 'percentile', 'completed_user_assessments', 'scoring_completed', 'external_job_id', 'remaining_assessment_count', 'created_at', 'updated_at', 'id', 'email', 'first_name', 'middle_name', 'last_name', 'country_code', 'phone', 'created_at', 'updated_at', 'id', 'name', 'sequence', 'slug', 'job_id', 'maintain_anonymity', 'type', 'created_at', 'updated_at']
-            candidate_ids_set.add(value[0])
+        if len(candidacies) > 0:
+            for value in candidacies:
+                # fields: ['id', 'user_id', 'job_id', 'pipeline_stage_id', 'added_to_stage_at', 'score', 'possible_score', 'weighted_percentage_score', 'archive_reason', 'parent_candidacy_id', 'status', 'progress', 'failed', 'withdraw_reason', 'percentile', 'completed_user_assessments', 'scoring_completed', 'external_job_id', 'remaining_assessment_count', 'created_at', 'updated_at', 'id', 'email', 'first_name', 'middle_name', 'last_name', 'country_code', 'phone', 'created_at', 'updated_at', 'id', 'name', 'sequence', 'slug', 'job_id', 'maintain_anonymity', 'type', 'created_at', 'updated_at']
+                candidate_ids_set.add(value[0])
 
         candidate_ids = tuple(candidate_ids_set)
 
         non_pipeline_scoring_dimension_ids = []
 
-        sql = """
-            SELECT DISTINCT a.* FROM e_user_assessments as ua
-            INNER JOIN e_candidacies as c ON ua.user_id=c.user_id
-            INNER JOIN e_assessments as a ON a.id=ua.assessment_id
-            WHERE c.job_id IN {} AND c.id IN {} AND a.id NOT IN {};
-        """.format(
-            job_ids, candidate_ids, assessment_ids
-        )
-        non_pipeline_assessments = self.connect_psql(sql)
+        if len(candidate_ids) > 0:
+            sql = """
+                SELECT DISTINCT a.* FROM e_user_assessments as ua
+                INNER JOIN e_candidacies as c ON ua.user_id=c.user_id
+                INNER JOIN e_assessments as a ON a.id=ua.assessment_id
+                WHERE c.job_id IN {} AND c.id IN {} AND a.id NOT IN {};
+            """.format(
+                job_ids, candidate_ids, assessment_ids
+            )
+            non_pipeline_assessments = self.connect_psql(sql)
+        else:
+            non_pipeline_assessments = [()]
         print("non_pipeline_assessments length: ", len(non_pipeline_assessments))
 
         for assessment in assessments:
             # fields: ['id', 'name', 'type', 'slug', 'created_at', 'updated_at']
+            if len(assessment) <= 0:
+                continue
             select_steps_sql = f"SELECT id FROM e_steps WHERE assessment_id={assessment[0]};"
             steps = self.connect_psql(select_steps_sql)
             for step in steps:
@@ -184,6 +200,8 @@ class JobCandidates:
 
         for assessment in non_pipeline_assessments:
             # fields: ['id', 'name', 'type', 'slug', 'created_at', 'updated_at']
+            if len(assessment) <= 0:
+                continue
             select_steps_sql = f"SELECT id FROM e_steps WHERE assessment_id={assessment[0]};"
             steps = self.connect_psql(select_steps_sql)
             for step in steps:
@@ -195,19 +213,25 @@ class JobCandidates:
         non_pipeline_scoring_dimension_ids = tuple(set(non_pipeline_scoring_dimension_ids))
         print("non_pipeline_scoring_dimension_ids length:", len(non_pipeline_scoring_dimension_ids))
 
-        select_scoring_dimensions_sql = (
-            f"SELECT DISTINCT * FROM scoring_dimensions WHERE id IN {scoring_dimension_ids};"
-        )
-        scoring_dimensions = self.connect_psql(select_scoring_dimensions_sql)
-        print("scoring_dimensions length: ", scoring_dimensions)
+        if len(scoring_dimension_ids) > 0:
+            select_scoring_dimensions_sql = (
+                f"SELECT DISTINCT * FROM e_scoring_dimensions WHERE id IN {scoring_dimension_ids};"
+            )
+            scoring_dimensions = self.connect_psql(select_scoring_dimensions_sql)
+        else:
+            scoring_dimensions = [()]
+        print("scoring_dimensions length: ", len(scoring_dimensions))
 
-        select_non_pipeline_scoring_dimensions_sql = (
-            f"SELECT DISTINCT * FROM scoring_dimensions WHERE id IN {non_pipeline_scoring_dimension_ids};"
-        )
-        non_pipeline_scoring_dimensions = self.connect_psql(select_non_pipeline_scoring_dimensions_sql)
-        print("non_pipeline_scoring_dimensions length: ", non_pipeline_scoring_dimensions)
+        if len(non_pipeline_scoring_dimension_ids) > 0:
+            select_non_pipeline_scoring_dimensions_sql = (
+                f"SELECT DISTINCT * FROM e_scoring_dimensions WHERE id IN {non_pipeline_scoring_dimension_ids};"
+            )
+            non_pipeline_scoring_dimensions = self.connect_psql(select_non_pipeline_scoring_dimensions_sql)
+        else:
+            non_pipeline_scoring_dimensions = [()]
+        print("non_pipeline_scoring_dimensions length: ", len(non_pipeline_scoring_dimensions))
 
-        with open("~/test_telusinternational.csv", "a+") as file:
+        with open("/home/lss/test_telus1.csv", "a+") as file:
             csv_write = csv.writer(file)
             csv_headers = [
                 "user_id",
@@ -237,6 +261,8 @@ class JobCandidates:
 
             for assessment in assessments:
                 # fields: ['id', 'name', 'type', 'slug', 'created_at', 'updated_at']
+                if len(assessment) <= 0:
+                    continue
                 name = assessment[1].strip().lower().replace(" ", "_")
                 assessment_headers = [
                     f"{name}_percentage",
@@ -248,15 +274,17 @@ class JobCandidates:
                 csv_headers.extend(assessment_headers)
 
             for scoring_dimension in scoring_dimensions:
-                # fields:
-                # ['id', 'name', 'created_at', 'updated_at', 'deleted_at',
-                # 'organization_id', 'parent_id', 'polar_opposite_name', 'polar']
+                # fields: ['id', 'name', 'organization_id']
+                if len(scoring_dimension) <= 0:
+                    continue
                 name = scoring_dimension[1].strip().lower().replace(" ", "_")
                 scoring_dimension_headers = [f"{name}_percentage", f"{name}_percentile"]
                 csv_headers.extend(scoring_dimension_headers)
 
             for assessment in non_pipeline_assessments:
                 # fields: ['id', 'name', 'type', 'slug', 'created_at', 'updated_at']
+                if len(assessment) <= 0:
+                    continue
                 name = assessment[1].strip().lower().replace(" ", "_") + "_non_pipline"
                 scoring_dimension_headers = [
                     f"{name}_percentage_NON_PIPELINE",
@@ -268,18 +296,18 @@ class JobCandidates:
                 csv_headers.extend(scoring_dimension_headers)
 
             for sd in non_pipeline_scoring_dimensions:
-                # fields:
-                # ['id', 'name', 'created_at', 'updated_at', 'deleted_at',
-                # 'organization_id', 'parent_id', 'polar_opposite_name', 'polar']
+                # fields: ['id', 'name', 'organization_id']
+                if len(sd) <= 0:
+                    continue
                 name = sd[1].strip().lower().replace(" ", "_")
                 sd_headers = [f"{name}_percentage_NON_PIPELINE", f"{name}_percentile_NON_PIPELINE"]
                 csv_headers.extend(sd_headers)
 
             for custom_field in custom_fields:
-                # fields:
-                # ['id', 'organization_id', 'name', 'slug', 'type', 'created_at',
-                # 'updated_at', 'deleted_at', 'suggested_values', 'privacy_level', 'sequence']
-                name = custom_field[2].strip().lower().replace(" ", "_")
+                # fields: ['id', 'organization_id', 'name', 'slug', 'type']
+                if len(custom_field) <= 0:
+                    continue
+                name = custom_field[2].strip()
                 csv_headers.append(name)
 
             print("headers length: ", len(csv_headers))
@@ -328,7 +356,7 @@ class JobCandidates:
                 #     "e_users_updated_at",
                 # ]
 
-                print(candidacy)
+                # print(candidacy)
                 csv_values = []
                 candidacy_dict = {}
                 for field in CANDIDACY_FIELDS:
@@ -364,7 +392,7 @@ class JobCandidates:
 
                 select_tags_name_sql = """
                     SELECT t.name FROM e_tags AS t
-                    INNER JOIN candidacy_tags AS ct ON ct.tag_id=t.id WHERE ct.candidacy_id={}
+                    INNER JOIN e_candidacy_tags AS ct ON ct.tag_id=t.id WHERE ct.candidacy_id={}
                 """.format(
                     candidacy_dict["e_candidacies_id"]
                 )
@@ -394,7 +422,7 @@ class JobCandidates:
                 csv_values.append(round((datetime.now() - candidacy_dict["e_candidacies_created_at"]).total_seconds()))
 
                 select_events_email_query = """
-                                        SELECT count(*) FROM events 
+                                        SELECT count(*) FROM e_events 
                                         WHERE candidacy_id={} AND type='email';
                                     """.format(
                     candidacy_dict["e_candidacies_id"]
@@ -402,7 +430,7 @@ class JobCandidates:
                 candidacies_events_email_count = self.connect_psql(select_events_email_query)
 
                 select_events_sms_query = """
-                                        SELECT count(*) FROM events 
+                                        SELECT count(*) FROM e_events 
                                         WHERE candidacy_id={} AND type='sms';
                                     """.format(
                     candidacy_dict["e_candidacies_id"]
@@ -410,7 +438,7 @@ class JobCandidates:
                 candidacies_events_sms_count = self.connect_psql(select_events_sms_query)
 
                 select_events_email_last_query = """
-                                        SELECT created_at FROM events 
+                                        SELECT created_at FROM e_events 
                                         WHERE candidacy_id={} AND type='email' 
                                         ORDER BY id LIMIT 1;
                                     """.format(
@@ -419,7 +447,7 @@ class JobCandidates:
                 candidacies_events_email_last_created_at = self.connect_psql(select_events_email_last_query)
 
                 select_events_sms_last_query = """
-                                        SELECT created_at FROM events 
+                                        SELECT created_at FROM e_events 
                                         WHERE candidacy_id={} AND type='sms' 
                                         ORDER BY id LIMIT 1;
                                     """.format(
@@ -428,7 +456,7 @@ class JobCandidates:
                 candidacies_events_sms_last_created_at = self.connect_psql(select_events_sms_last_query)
 
                 select_calendar_events_query = """
-                                    SELECT start_datetime FROM calendar_events WHERE candidacy_id={};
+                                    SELECT start_datetime FROM e_calendar_events WHERE candidacy_id={};
                                 """.format(
                     candidacy_dict["e_candidacies_id"]
                 )
@@ -436,18 +464,23 @@ class JobCandidates:
 
                 csv_values.extend(
                     [
-                        candidacies_events_email_count[0][0],
-                        candidacies_events_sms_count[0][0],
-                        candidacies_events_email_last_created_at[0][0],
-                        candidacies_events_sms_last_created_at[0][0],
-                        select_calendar_events_start_datetime[0][0],
+                        candidacies_events_email_count[0][0] if len(
+                            candidacies_events_email_count) > 0 else "",
+                        candidacies_events_sms_count[0][0] if len(
+                            candidacies_events_sms_count) > 0 else "",
+                        candidacies_events_email_last_created_at[0][0] if len(
+                            candidacies_events_email_last_created_at) > 0 else "",
+                        candidacies_events_sms_last_created_at[0][0] if len(
+                            candidacies_events_sms_last_created_at) > 0 else "",
+                        select_calendar_events_start_datetime[0][0] if len(
+                            select_calendar_events_start_datetime) > 0 else "",
                     ]
                 )
 
                 for assessment in assessments:
                     # fields: ['id', 'name', 'type', 'slug', 'created_at', 'updated_at']
                     select_candidacy_user_assessments_query = """
-                                            SELECT ua.percentage_score, ua.score, ua.started_at, ua.completed_at 
+                                            SELECT ua.percentage_score, c.score, ua.started_at, ua.completed_at 
                                             FROM e_candidacies AS c 
                                             INNER JOIN e_user_assessments AS ua ON c.user_id=ua.user_id 
                                             WHERE c.id={} AND ua.assessment_id={};
@@ -457,7 +490,7 @@ class JobCandidates:
                     )
                     candidacy_user_assessments = self.connect_psql(select_candidacy_user_assessments_query)
 
-                    if len(candidacy_user_assessments[0]) > 0:
+                    if len(candidacy_user_assessments) > 0:
                         csv_values.extend(
                             [
                                 candidacy_user_assessments[0][0],
@@ -473,7 +506,7 @@ class JobCandidates:
                 for sd in scoring_dimensions:
                     select_sdr_query = """
                                    SELECT percentage_score 
-                                   FROM scoring_dimension_ratings 
+                                   FROM e_scoring_dimension_ratings 
                                    WHERE candidacy_id={} AND scoring_dimension_id={}
                                """.format(
                         candidacy_dict["e_candidacies_id"], sd[0]
@@ -484,7 +517,7 @@ class JobCandidates:
                 for assessment in non_pipeline_assessments:
                     # fields: ['id', 'name', 'type', 'slug', 'created_at', 'updated_at']
                     select_candidacy_user_assessments_query = """
-                                            SELECT ua.percentage_score, ua.score, ua.started_at, ua.completed_at 
+                                            SELECT ua.percentage_score, c.score, ua.started_at, ua.completed_at 
                                             FROM e_candidacies AS c 
                                             INNER JOIN e_user_assessments AS ua ON c.user_id=ua.user_id 
                                             WHERE c.id={} AND ua.assessment_id={};
@@ -494,7 +527,7 @@ class JobCandidates:
                     )
                     candidacy_user_assessments = self.connect_psql(select_candidacy_user_assessments_query)
 
-                    if len(candidacy_user_assessments[0]) > 0:
+                    if len(candidacy_user_assessments) > 0:
                         csv_values.extend(
                             [
                                 candidacy_user_assessments[0][0],
@@ -510,7 +543,7 @@ class JobCandidates:
                 for sd in non_pipeline_scoring_dimensions:
                     select_sdr_query = """
                                 SELECT percentage_score 
-                                FROM scoring_dimension_ratings 
+                                FROM e_scoring_dimension_ratings 
                                 WHERE candidacy_id={} AND scoring_dimension_id={};
                             """.format(
                         candidacy_dict["e_candidacies_id"], sd[0]
@@ -519,9 +552,8 @@ class JobCandidates:
                     csv_values.extend([sdr[0][0], candidacy_dict["e_candidacies_percentile"]])
 
                 for custom_field in custom_fields:
-
                     select_custom_field_query = """
-                        SELECT count(*) 
+                        SELECT value 
                         FROM e_answers 
                         WHERE question_id IN 
                         (SELECT id FROM e_questions WHERE custom_field_id={}) AND value<>'';
@@ -529,14 +561,17 @@ class JobCandidates:
                         custom_field[0]
                     )
                     custom_field_value = self.connect_psql(select_custom_field_query)
-                    csv_values.append(custom_field_value)
+                    val = custom_field_value[0][0] if len(custom_field_value) > 0 else ""
+                    csv_values.append(val)
 
+                print("values length: ", len(csv_values))
                 print("csv_values: ", csv_values)
+                print("=" * 20)
                 csv_write.writerow(csv_values)
 
     def run(self):
-        # job_ids = (2167, 969)
-        job_ids = (17530, 17531, 17580)
+        # job_ids = (5475, 18764, 21575, 81298)
+        job_ids = input("Input job IDs, example: (1, 2, 3):")
         self.process(job_ids)
 
 
