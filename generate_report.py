@@ -1,4 +1,5 @@
 # -*- coding:utf-8 -*-
+import os
 import csv
 import psycopg2
 from datetime import datetime
@@ -114,7 +115,8 @@ class JobCandidates:
 
         return rows
 
-    def process(self, job_ids):
+    def process(self, job_ids_str, cur_path):
+        job_ids = f"({job_ids_str})"
         print("==================process==================")
 
         scoring_dimension_ids = []
@@ -150,6 +152,8 @@ class JobCandidates:
         assessment_ids = tuple(assessment_ids_set)
 
         if len(assessment_ids) > 0:
+            if len(assessment_ids) == 1:
+                assessment_ids = f"({assessment_ids[0]})"
             select_assessments_sql = f"SELECT DISTINCT * from e_assessments WHERE id IN {assessment_ids};"
             assessments = self.connect_psql(select_assessments_sql)
         else:
@@ -214,6 +218,8 @@ class JobCandidates:
         print("non_pipeline_scoring_dimension_ids length:", len(non_pipeline_scoring_dimension_ids))
 
         if len(scoring_dimension_ids) > 0:
+            if len(scoring_dimension_ids) == 1:
+                scoring_dimension_ids = f"({scoring_dimension_ids[0]})"
             select_scoring_dimensions_sql = (
                 f"SELECT DISTINCT * FROM e_scoring_dimensions WHERE id IN {scoring_dimension_ids};"
             )
@@ -223,6 +229,8 @@ class JobCandidates:
         print("scoring_dimensions length: ", len(scoring_dimensions))
 
         if len(non_pipeline_scoring_dimension_ids) > 0:
+            if len(non_pipeline_scoring_dimension_ids) == 1:
+                non_pipeline_scoring_dimension_ids = f"({non_pipeline_scoring_dimension_ids[0]})"
             select_non_pipeline_scoring_dimensions_sql = (
                 f"SELECT DISTINCT * FROM e_scoring_dimensions WHERE id IN {non_pipeline_scoring_dimension_ids};"
             )
@@ -231,7 +239,9 @@ class JobCandidates:
             non_pipeline_scoring_dimensions = [()]
         print("non_pipeline_scoring_dimensions length: ", len(non_pipeline_scoring_dimensions))
 
-        with open("/home/lss/test_telus1.csv", "a+") as file:
+        job_ids_str = "_".join(job_ids_str.replace(" ", "").split(","))
+        path = cur_path + "/test_job_id_{}.csv".format(job_ids_str)
+        with open(path, "a+") as file:
             csv_write = csv.writer(file)
             csv_headers = [
                 "user_id",
@@ -566,13 +576,14 @@ class JobCandidates:
 
                 print("values length: ", len(csv_values))
                 print("csv_values: ", csv_values)
-                print("=" * 20)
+                print("=" * 40)
                 csv_write.writerow(csv_values)
 
     def run(self):
         # job_ids = (5475, 18764, 21575, 81298)
-        job_ids = input("Input job IDs, example: (1, 2, 3):")
-        self.process(job_ids)
+        cur_path = os.path.abspath(os.path.dirname(__file__))
+        job_ids_str = input("Enter job IDs and separate with comma, example: 1,2,3\n")
+        self.process(job_ids_str, cur_path)
 
 
 if __name__ == "__main__":

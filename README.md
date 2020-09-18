@@ -9,4 +9,4 @@ Make sure you have imported the dumps file into a database
 2. Activate virtual environment (`source venv/bin/activate`)
 3. Install requirements.txt (`pip install -r requirements.txt`)
 4. Copy `config.example.ini` as `config.ini` and fill your database config
-5. Run the `generate_report.py`, input job IDs. The format of job IDs is `(1, 2, 3)`.
+5. Run the `generate_report.py`, enter job IDs. The format of job IDs is `1,2,3`.
