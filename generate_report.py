@@ -116,9 +116,7 @@ class JobCandidates:
         return rows
 
     def process(self, job_ids_str, cur_path):
-        print(job_ids_str, type(job_ids_str))
         job_ids = f"({job_ids_str})"
-        print(job_ids, type(job_ids))
         print("==================process==================")
 
         scoring_dimension_ids = []
