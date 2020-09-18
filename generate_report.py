@@ -240,7 +240,7 @@ class JobCandidates:
         print("non_pipeline_scoring_dimensions length: ", len(non_pipeline_scoring_dimensions))
 
         job_ids_str = "_".join(job_ids_str.replace(" ", "").split(","))
-        path = cur_path + "/test_job_id_{}.csv".format(job_ids_str)
+        path = os.path.join(cur_path, 'reports',  "jobs_{}.csv".format(job_ids_str))
         with open(path, "a+") as file:
             csv_write = csv.writer(file)
             csv_headers = [
@@ -588,3 +588,4 @@ class JobCandidates:
 
 if __name__ == "__main__":
     JobCandidates().run()
+    print("DONE")
