@@ -324,49 +324,6 @@ class JobCandidates:
             csv_write.writerow(csv_headers)
 
             for candidacy in candidacies:
-                # field_names: [
-                #     "e_candidacies_id",
-                #     "e_candidacies_user_id",
-                #     "e_candidacies_job_id",
-                #     "e_candidacies_pipeline_stage_id",
-                #     "e_candidacies_added_to_stage_at",
-                #     "e_candidacies_score",
-                #     "e_candidacies_possible_score",
-                #     "e_candidacies_weighted_percentage_score",
-                #     "e_candidacies_archive_reason",
-                #     "e_candidacies_parent_candidacy_id",
-                #     "e_candidacies_status",
-                #     "e_candidacies_progress",
-                #     "e_candidacies_failed",
-                #     "e_candidacies_withdraw_reason",
-                #     "e_candidacies_percentile",
-                #     "e_candidacies_completed_user_assessments",
-                #     "e_candidacies_scoring_completed",
-                #     "e_candidacies_external_job_id",
-                #     "e_candidacies_remaining_assessment_count",
-                #     "e_candidacies_created_at",
-                #     "e_candidacies_updated_at",
-                #     "e_pipeline_stages_id",
-                #     "e_pipeline_stages_name",
-                #     "e_pipeline_stages_sequence",
-                #     "e_pipeline_stages_slug",
-                #     "e_pipeline_stages_job_id",
-                #     "e_pipeline_stages_maintain_anonymity",
-                #     "e_pipeline_stages_type",
-                #     "e_pipeline_stages_created_at",
-                #     "e_pipeline_stages_updated_at",
-                #     "e_users_id",
-                #     "e_users_email",
-                #     "e_users_first_name",
-                #     "e_users_middle_name",
-                #     "e_users_last_name",
-                #     "e_users_country_code",
-                #     "e_users_phone",
-                #     "e_users_created_at",
-                #     "e_users_updated_at",
-                # ]
-
-                # print(candidacy)
                 csv_values = []
                 candidacy_dict = {}
                 for field in CANDIDACY_FIELDS:
