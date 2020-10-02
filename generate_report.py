@@ -219,13 +219,22 @@ class JobCandidates:
             str_candidate_ids = str(candidate_ids)
             if len(candidate_ids) == 1:
                 str_candidate_ids = str(candidate_ids).replace(',', '') # deal with solo item
-            sql = f"""
-                SELECT DISTINCT a.* FROM e_user_assessments as ua
-                INNER JOIN e_candidacies as c ON ua.user_id=c.user_id
-                INNER JOIN e_assessments as a ON a.id=ua.assessment_id
-                WHERE c.job_id IN {job_ids} AND c.id IN {str_candidate_ids} 
-                AND a.id NOT IN {assessment_ids}
-            """
+            sql = ''
+            if len(assessment_ids) > 0:
+                sql = f"""
+                    SELECT DISTINCT a.* FROM e_user_assessments as ua
+                    INNER JOIN e_candidacies as c ON ua.user_id=c.user_id
+                    INNER JOIN e_assessments as a ON a.id=ua.assessment_id
+                    WHERE c.job_id IN {job_ids} AND c.id IN {str_candidate_ids} 
+                    AND a.id NOT IN {assessment_ids}
+                """
+            else:
+                sql = f"""
+                    SELECT DISTINCT a.* FROM e_user_assessments as ua
+                    INNER JOIN e_candidacies as c ON ua.user_id=c.user_id
+                    INNER JOIN e_assessments as a ON a.id=ua.assessment_id
+                    WHERE c.job_id IN {job_ids} AND c.id IN {str_candidate_ids}
+                """
             non_pipeline_assessments = self.connect_psql(sql)
         else:
             non_pipeline_assessments = [()]
@@ -381,7 +390,8 @@ class JobCandidates:
                     data.append(future.result())
             print ("WRITING FILE!")
             for d in data:
-                csv_write.writerow(d)
+                if d:
+                    csv_write.writerow(d)
 
                 # print("values length: ", len(csv_values))
                 # print("csv_values: ", csv_values)
@@ -520,6 +530,8 @@ class JobCandidates:
         )
 
         for assessment in assessments:
+            if not assessment:
+                continue
             # fields: ['id', 'name', 'type', 'slug', 'created_at', 'updated_at']
             select_candidacy_user_assessments_query = """
                                     SELECT ua.percentage_score, c.score, ua.started_at, ua.completed_at 
@@ -613,12 +625,13 @@ class JobCandidates:
             return csv_values
 
 if __name__ == "__main__":
-    ORG_NAMES = ['telus',
-                 'telusinternational',
-                 'tieu',
+    ORG_NAMES = [
+                #'telus', # done
+                 #'tieu', # done
                  'tiir',
                  'tiph',
-                 'tius']
+                 'tius',
+                 'telusinternational',]
 
     for org in ORG_NAMES:
         print(f"STARTING {org}")
