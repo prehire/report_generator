@@ -216,11 +216,14 @@ class JobCandidates:
         non_pipeline_scoring_dimension_ids = []
 
         if len(candidate_ids) > 0:
+            str_candidate_ids = str(candidate_ids)
+            if len(candidate_ids) == 1:
+                str_candidate_ids = str(candidate_ids).replace(',', '') # deal with solo item
             sql = f"""
                 SELECT DISTINCT a.* FROM e_user_assessments as ua
                 INNER JOIN e_candidacies as c ON ua.user_id=c.user_id
                 INNER JOIN e_assessments as a ON a.id=ua.assessment_id
-                WHERE c.job_id IN {job_ids} AND c.id IN {candidate_ids} 
+                WHERE c.job_id IN {job_ids} AND c.id IN {str_candidate_ids} 
                 AND a.id NOT IN {assessment_ids}
             """
             non_pipeline_assessments = self.connect_psql(sql)
@@ -543,15 +546,18 @@ class JobCandidates:
                 csv_values.extend(["", "", "", "", ""])
 
         for sd in scoring_dimensions:
-            select_sdr_query = """
-                           SELECT percentage_score 
-                           FROM e_scoring_dimension_ratings 
-                           WHERE candidacy_id={} AND scoring_dimension_id={}
-                       """.format(
-                candidacy_dict["e_candidacies_id"], sd[0]
-            )
-            sdr = self.connect_psql(select_sdr_query)
-            csv_values.extend([sdr[0][0], candidacy_dict["e_candidacies_percentile"]])
+            if sd:
+                select_sdr_query = """
+                               SELECT percentage_score 
+                               FROM e_scoring_dimension_ratings 
+                               WHERE candidacy_id={} AND scoring_dimension_id={}
+                           """.format(
+                    candidacy_dict["e_candidacies_id"], sd[0]
+                )
+                sdr = self.connect_psql(select_sdr_query)
+                csv_values.extend([sdr[0][0], candidacy_dict["e_candidacies_percentile"]])
+            else:
+                csv_values.extend(['', candidacy_dict["e_candidacies_percentile"]])
 
         for assessment in non_pipeline_assessments:
             # fields: ['id', 'name', 'type', 'slug', 'created_at', 'updated_at']
